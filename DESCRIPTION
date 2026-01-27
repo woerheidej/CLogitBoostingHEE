@@ -1,0 +1,20 @@
+Package: CLogitBoostingHEE
+Type: Package
+Title: Detection of Heterogeneous Exposure Effects
+Version: 0.1.0
+Authors@R: 
+    person("Jack", "Wörheide", email = "jack.woerheide@tum.de", role = c("aut", "cre"))
+    person("Gunter", "Schauberger", email = "gunter.schauberger@tum.de", role = c("aut", "cre"))
+Description: Method for detecting heterogeneous exposure effects in matched
+    case-control studies using component-wise gradient boosting and
+    stability selection.
+License: MIT
+Encoding: UTF-8
+LazyData: true
+Imports:
+    mboost,
+    stats,
+    stabs
+Suggests:
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
