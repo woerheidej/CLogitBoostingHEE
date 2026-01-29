@@ -65,18 +65,15 @@ generate_formula <- function(
     center = TRUE,
     flexible = TRUE
 ) {
-  
+
   vars <- setdiff(names(data), c(response, strata, outcome, matching))
-  
-  is_cont <- vapply(
-    data[, vars, drop = FALSE],
-    function(x) is.numeric(x) && length(unique(x)) > 2,
-    logical(1)
+  is_cont <- sapply(data[, vars, drop = FALSE], function(x)
+    is.numeric(x) && length(unique(x)) > 2
   )
-  
+
   cont_vars <- vars[is_cont]
   cat_vars  <- vars[!is_cont]
-  
+
   make_term <- function(type, var) {
     switch(
       type,
@@ -88,7 +85,7 @@ generate_formula <- function(
                     ", center = ", center, ")")
     )
   }
-  
+
   base_terms <- c(
     vapply(cat_vars,  make_term, "", type = "bols"),
     if (flexible) {
@@ -100,7 +97,7 @@ generate_formula <- function(
       vapply(cont_vars, make_term, "", type = "bols")
     }
   )
-  
+
   interaction_terms <- character(0)
   if (include_interactions) {
     inter_vars <- if (!is.null(exposure) && exposure %in% vars) {
@@ -108,7 +105,7 @@ generate_formula <- function(
     } else {
       NULL
     }
-    
+
     if (!is.null(inter_vars)) {
       interaction_terms <- vapply(
         inter_vars,
@@ -121,9 +118,9 @@ generate_formula <- function(
       )
     }
   }
-  
+
   terms <- c(base_terms, interaction_terms)
-  
+
   list(
     form = as.formula(paste(response, "~", paste(terms, collapse = " + "))),
     all_terms = terms

@@ -6,12 +6,13 @@
 #'
 #' @param data A data.frame containing the outcome, covariates, and strata variable.
 #' @param formula A `gamboost` formula defining predictors for the offset model.
-#' @param mstop Maximum number of boosting iterations.
-#' @param nu Step size for boosting (learning rate, default 1).
+#' @param mstop Integer maximum number of boosting iterations.
+#' @param nu Numeric step size for boosting (learning rate, default 1).
 #' @param strata Character string naming the strata variable for matched design.
-#' @param K Number of folds for cross-validation (default 5).
-#' @param steady_state_percentage Threshold for minimal improvement in CV risk
+#' @param K Integer of folds for cross-validation (default 5).
+#' @param steady_state_percentage Integer Threshold for minimal improvement in CV risk
 #'   to declare the model in steady state (default 0.01, i.e., 0.01% change).
+#' @param plot Logical. If the CV of the offset should be printed.
 #'
 #' @return A fitted `gamboost` object with optimal number of iterations.
 #'
@@ -20,23 +21,23 @@
 #' offset_mod <- gen_offset_model(data, formula = "resp ~ X + Z1 + Z2", mstop = 500, nu = 0.1, strata = "strata")
 #' }
 #' @export
-gen_offset_model <- function(data, formula, mstop, nu, strata, K = 5, steady_state_percentage = 0.01) {
-  
+gen_offset_model <- function(data, formula, mstop, nu, strata, K = 5, steady_state_percentage = 0.01, plot = TRUE) {
+
   # Fit initial boosting model
   offset_model <- gamboost(
     formula,
     data = data,
     family = CLogit(),
     control = boost_control(mstop = mstop, nu = nu)
-  ) 
-  
+  )
+
   # Generate CV folds for strata
   sim.folds <- make_cv_folds(data, strata, K = K)
-  
+
   # Cross-validation
-  cv.offset <- cvrisk(offset_model, folds = sim.folds, mc.cores = 1)
+  cv.offset <- cvrisk(offset_model, folds = sim.folds, mc.cores = 5)
   opt <- mstop(cv.offset)
-  
+  browser()
   # Check if model has reached steady state
   # (Checks the last 5 iterations and calculates a mean rolling change)
   range_idx <- max(1, mstop - 4):mstop
@@ -46,17 +47,19 @@ gen_offset_model <- function(data, formula, mstop, nu, strata, K = 5, steady_sta
     })
   ) * 100
   is_steady <- rolling_change < steady_state_percentage
-  
+
   # Message if optimal mstop is close to or equal maximum
   if (opt %in% (mstop-5):mstop) {
     if(is_steady){
       message("Optimal CV stopping iteration is near maximum, but the model is nearly stable. Should be fine!")
-      plot(cv.offset)
     } else{
       message("Optimal CV stopping iteration is near or equal to the maximum. Consider increasing mstop or adjusting nu.")
-    }
+       }
   }
-  
+  if(plot){
+    plot(cv.offset)
+  }
+
   # Return model refitted to optimal mstop
   offset_model[mstop(cv.offset)]
 }
@@ -78,29 +81,29 @@ gen_offset_model <- function(data, formula, mstop, nu, strata, K = 5, steady_sta
 #' folds <- make_cv_folds(data, strata = "strata", K = 5)
 #' }
 #' @export
-#' 
-#' 
+#'
+#'
 make_cv_folds <- function(data, strata, K = 10) {
-  
+
   strata.unique <- sample(unique(data[[strata]]))
   n.strata <- length(strata.unique)
-  
+
   # Compute number of strata per fold
   n.fold <- rep(floor(n.strata / K), K)
   remainder <- n.strata - sum(n.fold)
   if(remainder > 0){
     n.fold[seq_len(remainder)] <- n.fold[seq_len(remainder)] + 1
   }
-  
+
   # Initialize fold matrix
   folds <- matrix(1, nrow = nrow(data), ncol = K)
-  
+
   start <- 0
   for (i in seq_len(K)) {
     strata.i <- strata.unique[(start + 1):(start + n.fold[i])]
     folds[data[[strata]] %in% strata.i, i] <- 0
     start <- start + n.fold[i]
   }
-  
+
   folds
 }
