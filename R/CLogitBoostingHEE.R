@@ -46,8 +46,6 @@
 #' @param early_stopping Logical, should the offset model be refined through
 #' early stopping? Can be deactivated for high-dimensional data to save runtime. (default TRUE)
 #'
-#' @param remove Logical, if TRUE, removes variables that are singular in any fold.
-#'
 #' @return A `stabsel` object containing selected variables and selection
 #'   probabilities.
 #'
@@ -89,8 +87,7 @@ CLogitBoostingHEE <- function(
     center = TRUE,
     flexible = TRUE,
     reduction_scaler = 1,
-    early_stopping = TRUE,
-    remove = FALSE
+    early_stopping = TRUE
 ) {
 
   # Stability selection parameter check:
@@ -104,18 +101,6 @@ CLogitBoostingHEE <- function(
       ifelse(is.null(PFER), "NULL", PFER),
       ifelse(is.null(cutoff), "NULL", cutoff)
     ), call. = FALSE)
-  }
-
-  # Helper: detect continuous variables
-  detect_continuous <- function(df, exclude = c()) {
-    vars <- setdiff(names(df), exclude)
-    is_cont <- sapply(df[, vars, drop = FALSE], function(x)
-      is.numeric(x) && length(unique(x)) > 2
-    )
-    list(
-      cont_vars = vars[is_cont],
-      cat_vars  = vars[!is_cont]
-    )
   }
 
   # Detect variable types
@@ -154,31 +139,14 @@ CLogitBoostingHEE <- function(
     folds[strata_vec %in% smp, j] <- 1
   }
 
-  # Check for constant variables in complementary folds
-  # Check for constant columns and interactions fold-wise
-  const_by_pair <- sapply(setdiff(names(data_proc), c(response, strata)), function(v) {
-    # Count number of folds where the variable (or its interaction) is constant
-    sum(sapply(seq_len(ncol(folds)), function(j) {
-      idx1 <- folds[, j] == 1
-      idx2 <- folds[, j] == 0
-
-      x1 <- data_proc[[v]][idx1]
-      x2 <- data_proc[[v]][idx2]
-      x3 <- data_proc[[exposure]][idx1]
-      x4 <- data_proc[[exposure]][idx2]
-
-      v1_const <- length(unique(x1[!is.na(x1)])) <= 1
-      v2_const <- length(unique(x2[!is.na(x2)])) <= 1
-
-      # interaction check (safe for numeric/factor)
-      v3_const <- length(unique(interaction(x1[!is.na(x1)], x3[!is.na(x3)], drop = TRUE))) <= 1
-      v4_const <- length(unique(interaction(x2[!is.na(x2)], x4[!is.na(x4)], drop = TRUE))) <= 1
-
-      sum((v1_const | v3_const),(v2_const|v4_const))
-    }))
-  })
-
-  singular_cols <- names(const_by_pair[const_by_pair > 0])
+  singular_cols <- detect_singular_cols(
+    data_proc = data_proc,
+    exposure = exposure,
+    outcome = outcome,
+    response = response,
+    strata = strata,
+    folds = folds
+  )
 
   if (length(singular_cols) > 0) {
     # Generate informative message
@@ -186,22 +154,12 @@ CLogitBoostingHEE <- function(
       singular_cols,
       " (", const_by_pair[singular_cols], " fold", ifelse(const_by_pair[singular_cols] > 1, "s", ""), ")"
     )
-
-    if(remove){
       warning(sprintf(
-        "Some columns are constant (singular) in at least one fold: %s. They are removed from analysis.",
+        "Some columns are constant (singular) in at least one fold: %s. They are removed from HEE analysis.",
         paste(singular_msg, collapse = ", ")
       ), call. = FALSE)
-      data_proc <- data_proc %>%
-        select(-singular_cols)
-    }
-    else{
-    warning(sprintf(
-      "Some columns are constant (singular) in at least one fold: %s. If that poses a problem, consider removing or adjusting these variables before rerunning.",
-      paste(singular_msg, collapse = ", ")
-    ), call. = FALSE)}
-  }
 
+}
 
 
 
@@ -216,6 +174,7 @@ CLogitBoostingHEE <- function(
     outcome = outcome,
     matching = matching,
     flexible = flexible,
+    singular = singular_cols,
     include_interactions = TRUE
   )
 

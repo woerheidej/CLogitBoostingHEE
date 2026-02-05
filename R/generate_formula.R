@@ -44,6 +44,8 @@
 #'   learners are included for continuous covariates; otherwise, only
 #'   linear base learners are used.
 #'
+#' @param singular Character vector, don't include these as interactions, as they lead to singular cols.
+#'
 #' @return A list with components:
 #'   \describe{
 #'     \item{form}{A model formula suitable for \code{mboost::gamboost}.}
@@ -64,7 +66,8 @@ generate_formula <- function(
     df_bbs = 1,
     intercept = FALSE,
     center = TRUE,
-    flexible = TRUE
+    flexible = TRUE,
+    singular = NULL
 ) {
 
   vars <- setdiff(names(data), c(response, strata, outcome, matching))
@@ -104,7 +107,7 @@ generate_formula <- function(
 
     if (!is.null(exposure) && exposure %in% vars) {
       # Interactions only with exposure
-      inter_vars <- setdiff(c(vars, matching), exposure)
+      inter_vars <- setdiff(c(vars, matching), c(exposure, singular))
 
       interaction_terms <- vapply(
         inter_vars,
